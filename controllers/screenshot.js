@@ -83,6 +83,8 @@ function checkUrl(url) {
   if (!hostPass) {
     return { errMsg: 'url地址非法' }
   }
+
+  return {}
 }
 
 function checkViewport(viewport) {
