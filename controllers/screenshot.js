@@ -17,6 +17,8 @@ const isNumber = makeTypeChecker('Number')
 const isBoolean = makeTypeChecker('Boolean')
 const isString = makeTypeChecker('String')
 const isObject = makeTypeChecker('Object')
+const oneOf = (someone, arr) => arr.indexOf(someone) !== -1
+const between = (someone, min, max) => someone >= min && someone <= max
 
 function autoDestroyBrowser() {
   if (timer) {
@@ -120,6 +122,39 @@ function checkViewport(viewport) {
   return {}
 }
 
+function checkOptions(options) {
+  if (options === undefined) {
+    return {}
+  }
+
+  if (!isObject(options)) {
+    return { errMsg: 'options为<Object>型' }
+  }
+
+  const { type, quality, fullPage, omitBackground } = options
+
+  if (type !== undefined && !(isString(type) && oneOf(type, ['png', 'jpeg']))) {
+    return { errMsg: 'type为png或jpeg' }
+  }
+
+  if (
+    quality !== undefined &&
+    !(isNumber(quality) && between(quality, 1, 100))
+  ) {
+    return { errMsg: 'quality为<Number>型,且大于等于1小于等于100' }
+  }
+
+  if (fullPage !== undefined && !isBoolean(fullPage)) {
+    return { errMsg: 'fullPage为<Boolean>型' }
+  }
+
+  if (omitBackground !== undefined && !isBoolean(omitBackground)) {
+    return { errMsg: 'omitBackground为<Boolean>型' }
+  }
+
+  return { options: { type, quality, fullPage, omitBackground } }
+}
+
 function getFilename() {
   const name =
     Date.now() +
@@ -150,18 +185,15 @@ async function screenshoot(req, res, next) {
     }
     // lastRequest is used to determin wheather browser need to be destroyed
     lastRequest = new Date()
-    const { url, viewport } = req.body
-    const urlErrMsg = checkUrl(url)
+    const { url, viewport, options } = req.body
+    const urlErrMsg = checkUrl(url).errMsg
     const vpErrMsg = checkViewport(viewport).errMsg
+    const { errMsg: optErrMsg, options: opts } = checkOptions(options)
+    const errMsg = urlErrMsg || vpErrMsg || optErrMsg
 
-    if (vpErrMsg) {
+    if (errMsg) {
       res.set('Content-Type', 'text/plain')
-      return res.status(400).send(vpErrMsg)
-    }
-
-    if (urlErrMsg) {
-      res.set('Content-Type', 'text/plain')
-      return res.status(400).send(urlErrMsg)
+      return res.status(400).send(errMsg)
     }
 
     const browser = await getBrowser()
@@ -175,7 +207,7 @@ async function screenshoot(req, res, next) {
       await page.setViewport(viewport)
     }
 
-    await page.screenshot({ path: filename }).then(() => {
+    await page.screenshot(Object.assign({ path: filename }, opts)).then(() => {
       res.sendFile(filename, {}, err => {
         removeFile(filename)
       })
